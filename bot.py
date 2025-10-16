@@ -90,7 +90,7 @@ class TicketModal(discord.ui.Modal, title="Tính vé trong tương lai"):
 
 # ====== Fallback hỏi qua chat ======
 async def fallback_chat(interaction: discord.Interaction, ticket_type: str):
-    await interaction.response.send_message(f"Nhập **số vé {ticket_type} hiện tại**:", ephemeral=True)
+    await interaction.response.send_message(f"Nhập **Số vé {ticket_type} hiện tại**:", ephemeral=True)
 
     def check(msg):
         return msg.author == interaction.user and msg.channel == interaction.channel
@@ -102,7 +102,7 @@ async def fallback_chat(interaction: discord.Interaction, ticket_type: str):
         await interaction.followup.send("⚠️ Dữ liệu không hợp lệ hoặc hết thời gian nhập.", ephemeral=True)
         return
 
-    await interaction.followup.send("Nhập **số tháng cần tính (1–12)**:", ephemeral=True)
+    await interaction.followup.send("Nhập **Số tháng cần tính (1–12)**:", ephemeral=True)
     try:
         msg2 = await bot.wait_for("message", check=check, timeout=60)
         months = int(msg2.content)
@@ -131,14 +131,14 @@ async def calc(interaction: discord.Interaction):
         def __init__(self):
             super().__init__(timeout=60)
 
-        @discord.ui.button(label="Vé đen", style=discord.ButtonStyle.primary, emoji="🎟️")
+        @discord.ui.button(label="Vé đen", style=discord.ButtonStyle.primary, emoji="<:bt:1378705629182562304>")
         async def black_ticket(self, i: discord.Interaction, button: discord.ui.Button):
             try:
                 await i.response.send_modal(TicketModal("đen"))
             except:
                 await fallback_chat(i, "đen")
 
-        @discord.ui.button(label="Vé kỉ vật", style=discord.ButtonStyle.success, emoji="💎")
+        @discord.ui.button(label="Vé kỉ vật", style=discord.ButtonStyle.success, emoji="<:ks:1378705636396892330>")
         async def relic_ticket(self, i: discord.Interaction, button: discord.ui.Button):
             try:
                 await i.response.send_modal(TicketModal("kỉ vật"))
@@ -154,3 +154,4 @@ if not TOKEN:
     print("⚠️ Chưa có biến môi trường DISCORD_TOKEN!")
 else:
     bot.run(TOKEN)
+
