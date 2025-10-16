@@ -1,7 +1,24 @@
 import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import discord
 from discord import app_commands
 from discord.ext import commands
+
+# ====== Fake web server để Render không kill ======
+class PingServer(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is alive")
+
+def run_server():
+    port = int(os.getenv("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), PingServer)
+    server.serve_forever()
+
+threading.Thread(target=run_server, daemon=True).start()
+
 
 # ====== Cấu hình intents ======
 intents = discord.Intents.default()
@@ -66,6 +83,8 @@ class TicketModal(discord.ui.Modal, title="Tính vé trong tương lai"):
             await interaction.response.send_message("⚠️ Dữ liệu không hợp lệ.", ephemeral=True)
             return
 
+        # defer để tránh Unknown interaction
+        await interaction.response.defer(thinking=True, ephemeral=True)
         await calculate_tickets(interaction, self.ticket_type, current_ticket, months)
 
 
@@ -103,28 +122,30 @@ async def fallback_chat(interaction: discord.Interaction, ticket_type: str):
         pass
 
 
-# ====== Nút chọn loại vé ======
+# ====== Lệnh /calc ======
 @bot.tree.command(name="calc", description="Tính số vé trong tương lai 📅")
 async def calc(interaction: discord.Interaction):
+    await interaction.response.defer(thinking=False, ephemeral=True)
+
     class TicketSelect(discord.ui.View):
         def __init__(self):
             super().__init__(timeout=60)
 
-        @discord.ui.button(label="Vé đen", style=discord.ButtonStyle.primary, emoji="<:bt:1378705629182562304>")
-        async def black_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        @discord.ui.button(label="Vé đen", style=discord.ButtonStyle.primary, emoji="🎟️")
+        async def black_ticket(self, i: discord.Interaction, button: discord.ui.Button):
             try:
-                await interaction.response.send_modal(TicketModal("đen"))
+                await i.response.send_modal(TicketModal("đen"))
             except:
-                await fallback_chat(interaction, "đen")
+                await fallback_chat(i, "đen")
 
-        @discord.ui.button(label="Vé kỉ vật", style=discord.ButtonStyle.success, emoji="<:ks:1378705636396892330>")
-        async def relic_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        @discord.ui.button(label="Vé kỉ vật", style=discord.ButtonStyle.success, emoji="💎")
+        async def relic_ticket(self, i: discord.Interaction, button: discord.ui.Button):
             try:
-                await interaction.response.send_modal(TicketModal("kỉ vật"))
+                await i.response.send_modal(TicketModal("kỉ vật"))
             except:
-                await fallback_chat(interaction, "kỉ vật")
+                await fallback_chat(i, "kỉ vật")
 
-    await interaction.response.send_message("🎫 Chọn loại vé bạn muốn tính:", view=TicketSelect(), ephemeral=True)
+    await interaction.followup.send("🎫 Chọn loại vé bạn muốn tính:", view=TicketSelect(), ephemeral=True)
 
 
 # ====== Chạy bot ======
