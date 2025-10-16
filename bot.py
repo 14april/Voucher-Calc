@@ -1,97 +1,82 @@
+import os
 import discord
-from discord.ext import commands
 from discord import app_commands
-from datetime import datetime
+from discord.ext import commands
 
-# ----- Config -----
-TOKEN = "MTQyODMxMjUzMzc4MTE4NDUxMg.GWiSvX.yYBMM9Sy1CgW9Z4juZF3KNdrvtBhYaeyccSJMM"
-black_ticket = 81
-relic_ticket = 18
-
-# ------------------
-
+# ====== Cấu hình intents ======
 intents = discord.Intents.default()
-intents.messages = True
+intents.message_content = True
+
+# ====== Tạo bot ======
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# ====== Khi bot sẵn sàng ======
 @bot.event
 async def on_ready():
-    print(f"✅ Logged in as {bot.user}")
+    print(f"✅ Bot đã đăng nhập thành công: {bot.user}")
     try:
         synced = await bot.tree.sync()
-        print(f"🔁 Synced {len(synced)} command(s)")
+        print(f"🔁 Đã đồng bộ {len(synced)} lệnh slash.")
     except Exception as e:
-        print(f"❌ Sync failed: {e}")
+        print(f"❌ Lỗi sync command: {e}")
 
-@bot.tree.command(name="calc", description="Tính số vé trong tương lai")
+# ====== Slash command /calc ======
+@bot.tree.command(name="calc", description="Tính số vé trong tương lai 📅")
 async def calc(interaction: discord.Interaction):
-    # Gửi 2 nút chọn loại vé
-    view = TicketTypeView()
-    await interaction.response.send_message("Chọn loại vé bạn muốn tính:", view=view, ephemeral=True)
+    # Tạo 2 nút chọn
+    class TicketSelect(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
 
+        @discord.ui.button(label="🎟️ Vé đen", style=discord.ButtonStyle.primary)
+        async def black_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await ask_current_ticket(interaction, "đen")
 
-class TicketTypeView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=60)
+        @discord.ui.button(label="🏅 Vé kỉ vật", style=discord.ButtonStyle.success)
+        async def relic_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await ask_current_ticket(interaction, "kỉ vật")
 
-    @discord.ui.button(label="🎟️ Vé đen", style=discord.ButtonStyle.primary)
-    async def black_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("Nhập số vé hiện tại của bạn:", ephemeral=True)
-        bot.ticket_type[interaction.user.id] = "black"
+    await interaction.response.send_message("Chọn loại vé bạn muốn tính:", view=TicketSelect(), ephemeral=True)
 
-    @discord.ui.button(label="🧭 Vé kỉ vật", style=discord.ButtonStyle.secondary)
-    async def relic_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("Nhập số vé hiện tại của bạn:", ephemeral=True)
-        bot.ticket_type[interaction.user.id] = "relic"
+# ====== Hỏi số vé hiện tại & số tháng cần tính ======
+async def ask_current_ticket(interaction: discord.Interaction, ticket_type: str):
+    await interaction.response.send_message(f"Nhập **số vé {ticket_type} hiện tại** của bạn:", ephemeral=True)
 
+    def check(msg):
+        return msg.author == interaction.user and msg.channel == interaction.channel
 
-bot.ticket_type = {}
-bot.user_stage = {}
-bot.ticket_value = {}
-
-@bot.event
-async def on_message(message: discord.Message):
-    if message.author.bot:
+    msg = await bot.wait_for("message", check=check)
+    try:
+        current_ticket = int(msg.content)
+    except ValueError:
+        await interaction.followup.send("⚠️ Vui lòng nhập số hợp lệ.", ephemeral=True)
         return
 
-    uid = message.author.id
+    await interaction.followup.send("Nhập **số tháng cần tính (1–12)**:", ephemeral=True)
+    msg2 = await bot.wait_for("message", check=check)
+    try:
+        months = int(msg2.content)
+        if not (1 <= months <= 12):
+            raise ValueError
+    except ValueError:
+        await interaction.followup.send("⚠️ Số tháng phải từ 1 đến 12.", ephemeral=True)
+        return
 
-    # Kiểm tra xem người này đang nhập số vé không
-    if uid in bot.ticket_type and uid not in bot.user_stage:
-        try:
-            current_ticket = int(message.content)
-            bot.ticket_value[uid] = current_ticket
-            bot.user_stage[uid] = "waiting_months"
-            await message.reply("Nhập số **tháng** bạn muốn tính (1-12):")
-        except ValueError:
-            await message.reply("⚠️ Hãy nhập số hợp lệ.")
+    # ====== Tính kết quả ======
+    per_month = 81 if ticket_type == "đen" else 18
+    results = []
+    for i in range(1, months + 1):
+        total = current_ticket + per_month * i
+        results.append(f"Tháng {i}: **{total} vé {ticket_type}**")
 
-    elif uid in bot.user_stage and bot.user_stage[uid] == "waiting_months":
-        try:
-            months = int(message.content)
-            if months < 1 or months > 12:
-                await message.reply("⚠️ Nhập từ 1 đến 12 thôi nha.")
-                return
+    await interaction.followup.send(
+        f"📊 Kết quả dự tính cho {ticket_type}:\n" + "\n".join(results),
+        ephemeral=True
+    )
 
-            now = datetime.now()
-            ticket_type = bot.ticket_type[uid]
-            base = black_ticket if ticket_type == "black" else relic_ticket
-
-            result = []
-            total = bot.ticket_value[uid]
-            for i in range(1, months + 1):
-                month = (now.month + i - 1) % 12 + 1
-                total += base
-                result.append(f"📅 Tháng {month}: +{base} → **{total}** { 'vé đen' if ticket_type=='black' else 'vé kỉ vật' }")
-
-            await message.reply("\n".join(result))
-            # Xóa dữ liệu tạm
-            bot.ticket_type.pop(uid, None)
-            bot.user_stage.pop(uid, None)
-            bot.ticket_value.pop(uid, None)
-
-        except ValueError:
-            await message.reply("⚠️ Hãy nhập số hợp lệ.")
-
-
-bot.run(TOKEN)
+# ====== Chạy bot ======
+TOKEN = os.getenv("DISCORD_TOKEN")
+if not TOKEN:
+    print("⚠️ Chưa có biến môi trường DISCORD_TOKEN!")
+else:
+    bot.run(TOKEN)
