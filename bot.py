@@ -28,11 +28,11 @@ async def calc(interaction: discord.Interaction):
         def __init__(self):
             super().__init__(timeout=60)
 
-        @discord.ui.button(label="🎟️ Vé đen", style=discord.ButtonStyle.primary)
+        @discord.ui.button(label="Vé đen :bt:", style=discord.ButtonStyle.primary)
         async def black_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
             await ask_current_ticket(interaction, "đen")
 
-        @discord.ui.button(label="🏅 Vé kỉ vật", style=discord.ButtonStyle.success)
+        @discord.ui.button(label="Vé kỉ vật :ks:", style=discord.ButtonStyle.success)
         async def relic_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
             await ask_current_ticket(interaction, "kỉ vật")
 
@@ -80,3 +80,4 @@ if not TOKEN:
     print("⚠️ Chưa có biến môi trường DISCORD_TOKEN!")
 else:
     bot.run(TOKEN)
+
