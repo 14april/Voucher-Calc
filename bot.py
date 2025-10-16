@@ -21,72 +21,89 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Lỗi sync command: {e}")
 
+# ====== Modal nhập thông tin ======
+class TicketModal(discord.ui.Modal):
+    def __init__(self, ticket_type: str):
+        super().__init__(title="📋 Nhập thông tin tính vé")
+        self.ticket_type = ticket_type
+
+        # Ô nhập số vé hiện tại
+        self.current_ticket = discord.ui.TextInput(
+            label=f"Số vé {ticket_type} hiện tại",
+            placeholder="vd: 20",
+            style=discord.TextStyle.short,
+            required=True,
+            max_length=10
+        )
+
+        # Ô nhập số tháng cần tính
+        self.months = discord.ui.TextInput(
+            label="Số tháng cần tính (1–12)",
+            placeholder="vd: 4",
+            style=discord.TextStyle.short,
+            required=True,
+            max_length=2
+        )
+
+        self.add_item(self.current_ticket)
+        self.add_item(self.months)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            current_ticket = int(self.current_ticket.value.strip())
+            months = int(self.months.value.strip())
+            if not (1 <= months <= 12):
+                raise ValueError
+        except ValueError:
+            await interaction.response.send_message(
+                "⚠️ Vui lòng nhập số hợp lệ (vé là số nguyên, tháng từ 1–12).",
+                ephemeral=True
+            )
+            return
+
+        # ====== Tính toán ======
+        now = datetime.now()
+        current_month = now.month
+        current_year = now.year
+
+        per_month = 81 if self.ticket_type == "đen" else 18
+        ticket = current_ticket
+        results = []
+
+        for i in range(1, months + 1):
+            next_month = current_month + i
+            next_year = current_year
+            if next_month > 12:
+                next_month -= 12
+                next_year += 1
+
+            ticket += per_month
+            results.append(f"📅 **Tháng {next_month}/{next_year}:** {ticket} vé {self.ticket_type}")
+
+        # ====== Gửi kết quả ======
+        embed = discord.Embed(
+            title=f"📊 Dự tính vé {self.ticket_type}",
+            description="\n".join(results),
+            color=discord.Color.green()
+        )
+        embed.set_footer(text=f"Tính từ tháng {current_month}/{current_year}")
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# ====== Giao diện chọn loại vé ======
+class TicketSelect(discord.ui.View):
+    @discord.ui.button(label="Vé đen", style=discord.ButtonStyle.primary, emoji="<:bt:1378705629182562304>")
+    async def black_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TicketModal("đen"))
+
+    @discord.ui.button(label="Vé kỉ vật", style=discord.ButtonStyle.success, emoji="<:ks:1378705636396892330>")
+    async def relic_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TicketModal("kỉ vật"))
+
 # ====== Slash command /calc ======
 @bot.tree.command(name="calc", description="Tính số vé trong tương lai 📅")
 async def calc(interaction: discord.Interaction):
-    # Tạo 2 nút chọn
-    class TicketSelect(discord.ui.View):
-        def __init__(self):
-            super().__init__(timeout=60)
-
-        @discord.ui.button(label="Vé đen", style=discord.ButtonStyle.primary, emoji="<:bt:1378705629182562304>")
-        async def black_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-            await ask_current_ticket(interaction, "đen")
-
-        @discord.ui.button(label="Vé kỉ vật", style=discord.ButtonStyle.success, emoji="<:ks:1378705636396892330>")
-        async def relic_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-            await ask_current_ticket(interaction, "kỉ vật")
-
     await interaction.response.send_message("🎯 Chọn loại vé bạn muốn tính:", view=TicketSelect(), ephemeral=True)
-
-# ====== Hỏi số vé hiện tại & số tháng cần tính ======
-async def ask_current_ticket(interaction: discord.Interaction, ticket_type: str):
-    await interaction.response.send_message(f"🧮 Nhập **số vé {ticket_type} hiện tại** của bạn:", ephemeral=True)
-
-    def check(msg):
-        return msg.author == interaction.user and msg.channel == interaction.channel
-
-    msg = await bot.wait_for("message", check=check)
-    try:
-        current_ticket = int(msg.content)
-    except ValueError:
-        await interaction.followup.send("⚠️ Vui lòng nhập số hợp lệ.", ephemeral=True)
-        return
-
-    await interaction.followup.send("📆 Nhập **số tháng cần tính (1–12)**:", ephemeral=True)
-    msg2 = await bot.wait_for("message", check=check)
-    try:
-        months = int(msg2.content)
-        if not (1 <= months <= 12):
-            raise ValueError
-    except ValueError:
-        await interaction.followup.send("⚠️ Số tháng phải từ 1 đến 12.", ephemeral=True)
-        return
-
-    # ====== Tính kết quả với tháng/năm thực ======
-    now = datetime.now()
-    current_month = now.month
-    current_year = now.year
-    per_month = 81 if ticket_type == "đen" else 18
-
-    results = []
-    ticket = current_ticket
-
-    for i in range(1, months + 1):
-        next_month = current_month + i
-        next_year = current_year
-        if next_month > 12:
-            next_month -= 12
-            next_year += 1
-
-        ticket += per_month
-        results.append(f"📅 **Tháng {next_month}/{next_year}:** {ticket} vé {ticket_type}")
-
-    # Hiển thị kết quả
-    await interaction.followup.send(
-        f"✅ **Kết quả dự tính cho vé {ticket_type}:**\n" + "\n".join(results),
-        ephemeral=True
-    )
 
 # ====== Chạy bot ======
 TOKEN = os.getenv("DISCORD_TOKEN")
